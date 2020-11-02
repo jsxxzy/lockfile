@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -31,6 +32,74 @@ var ErrReadingLockfile = errors.New("Error reading lockfile")
 // ErrNotOwner means there was an attempt to unlock a lockfile
 // that was not owned by the current process
 var ErrNotOwner = errors.New("Process does not own lockfile")
+
+// ErrAppNameIsEmpty app name empty
+var ErrAppNameIsEmpty = errors.New("app name is empty")
+
+const (
+	// AppNameEmptyCode app name empty code
+	AppNameEmptyCode = iota
+	// AppReadLockFileFailCode read lock file fail
+	AppReadLockFileFailCode
+	// AppRunOtherProcess run other process
+	AppRunOtherProcess
+	// AppNone !!&&!!
+	AppNone
+)
+
+// SingleAppFace single app interface
+type SingleAppFace struct {
+	appname string // lock file path
+}
+
+// NewSingleApp create new `single app`
+func NewSingleApp(appname string) (*SingleAppFace, int, error) {
+	if len(appname) == 0 {
+		return &SingleAppFace{}, AppNameEmptyCode, ErrAppNameIsEmpty
+	}
+	var name = appname + ".lock"
+	flag, err := IsLocked(name)
+	if err != nil {
+		return &SingleAppFace{}, AppReadLockFileFailCode, err
+	}
+	if flag {
+		return &SingleAppFace{}, AppRunOtherProcess, ErrBusy
+	}
+	var errStack = Lock(name)
+	if errStack != nil {
+		return &SingleAppFace{}, AppReadLockFileFailCode, ErrReadingLockfile
+	}
+	return &SingleAppFace{
+		appname: name,
+	}, AppNone, nil
+}
+
+// Check run single app mode?
+func (sa *SingleAppFace) Check() (bool, error) {
+	return IsLocked(sa.appname)
+}
+
+// CallbackFreeFunc free callback
+type CallbackFreeFunc func()
+
+// Free lock file
+//
+// you app exit, auto remove lock file
+func (sa *SingleAppFace) Free(cb CallbackFreeFunc) {
+	// create listen and exit app
+	c := make(chan os.Signal)
+	// listen ctrl+c kill
+	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGUSR1, syscall.SIGUSR2)
+	go func() {
+		for s := range c {
+			switch s {
+			case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
+				Unlock(sa.appname)
+				cb()
+			}
+		}
+	}()
+}
 
 // Lock will attempt to grab a lock file at path
 // it will wait until it becomes available

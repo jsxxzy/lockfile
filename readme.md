@@ -4,6 +4,37 @@
 go get github.com/jsxxzy/lockfile
 ```
 
+example
+
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/jsxxzy/lockfile"
+)
+
+// ExitFunc 退出
+func ExitFunc() {
+	os.Exit(0)
+}
+
+func main() {
+	var lockfileName = "inet"
+	run, code, _ := lockfile.NewSingleApp(lockfileName)
+	if code == lockfile.AppRunOtherProcess {
+		fmt.Println("进程同时存在了")
+		return
+	}
+	run.Free(ExitFunc)
+	for {
+
+	}
+}
+```
+
 # 参考
 
 - https://github.com/jdxcode/golock

@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/jsxxzy/lockfile"
 )
@@ -18,27 +16,14 @@ func ExitFunc() {
 }
 
 func main() {
-	var lockfileName = "inet.lock"
-	flag, err := lockfile.IsLocked(lockfileName)
-	if !flag {
-		fmt.Println("进程锁未存在", err)
-		lockfile.Lock(lockfileName)
-		for {
-			//创建监听退出chan
-			c := make(chan os.Signal)
-			//监听指定信号 ctrl+c kill
-			signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGUSR1, syscall.SIGUSR2)
-			go func() {
-				for s := range c {
-					switch s {
-					case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-						lockfile.Unlock(lockfileName)
-						ExitFunc()
-					}
-				}
-			}()
-		}
-	} else {
-		fmt.Println("进程已经存在")
+	var lockfileName = "inet"
+	run, code, _ := lockfile.NewSingleApp(lockfileName)
+	if code == lockfile.AppRunOtherProcess {
+		fmt.Println("进程同时存在了")
+		return
+	}
+	run.Free(ExitFunc)
+	for {
+
 	}
 }
